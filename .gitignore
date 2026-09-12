@@ -11,6 +11,9 @@
 *.sln.docstates
 *.sln
 
+# Local document storage
+**/AppData/uploads/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

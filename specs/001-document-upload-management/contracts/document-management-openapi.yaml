@@ -1,0 +1,263 @@
+openapi: 3.0.3
+info:
+  title: ContosoDashboard Document Management API
+  version: 1.0.0
+  description: Contract for document upload, access, sharing, and audit operations.
+servers:
+  - url: /api
+paths:
+  /documents:
+    get:
+      summary: List documents visible to the current user
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: projectId
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+    post:
+      summary: Upload a document
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - category
+                - file
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                projectId:
+                  type: integer
+                tags:
+                  type: array
+                  items:
+                    type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Document created
+        '400':
+          description: Invalid request or file validation failure
+        '403':
+          description: Unauthorized upload
+
+  /documents/{documentId}:
+    get:
+      summary: Get document metadata and access state
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Document metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '403':
+          description: User is not authorized to view the document
+    put:
+      summary: Update document metadata or replace file
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdateRequest'
+      responses:
+        '200':
+          description: Document updated
+        '403':
+          description: User is not authorized to modify the document
+    delete:
+      summary: Delete a document
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Document deleted
+        '403':
+          description: Forbidden
+
+  /documents/{documentId}/download:
+    get:
+      summary: Download a document if authorized
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: File content
+        '403':
+          description: Unauthorized
+
+  /documents/{documentId}/share:
+    post:
+      summary: Share a document with a user or project group
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRequest'
+      responses:
+        '201':
+          description: Share created
+        '403':
+          description: Not allowed to share this file
+
+  /documents/shared:
+    get:
+      summary: List documents shared with the current user
+      responses:
+        '200':
+          description: Shared document list
+
+  /documents/project/{projectId}:
+    get:
+      summary: List project documents visible to the current user
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Project document list
+
+components:
+  schemas:
+    DocumentSummary:
+      type: object
+      properties:
+        documentId:
+          type: integer
+        title:
+          type: string
+        category:
+          type: string
+        uploadDateUtc:
+          type: string
+          format: date-time
+        fileSizeBytes:
+          type: integer
+        projectId:
+          type: integer
+          nullable: true
+        uploadedByUserName:
+          type: string
+
+    Document:
+      type: object
+      properties:
+        documentId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+        fileName:
+          type: string
+        fileType:
+          type: string
+        fileSizeBytes:
+          type: integer
+        uploadedByUserId:
+          type: integer
+        projectId:
+          type: integer
+          nullable: true
+        taskId:
+          type: integer
+          nullable: true
+        uploadDateUtc:
+          type: string
+          format: date-time
+        updatedDateUtc:
+          type: string
+          format: date-time
+
+    DocumentUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        replacementFile:
+          type: string
+          format: binary
+
+    ShareRequest:
+      type: object
+      required:
+        - accessScope
+      properties:
+        accessScope:
+          type: string
+          enum: [user, project]
+        userId:
+          type: integer
+          nullable: true
+        projectId:
+          type: integer
+          nullable: true

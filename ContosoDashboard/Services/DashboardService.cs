@@ -8,6 +8,7 @@ public interface IDashboardService
 {
     Task<DashboardSummary> GetDashboardSummaryAsync(int userId);
     Task<List<Announcement>> GetActiveAnnouncementsAsync();
+    Task<List<Document>> GetRecentDocumentsAsync(int userId, int count = 5);
 }
 
 public class DashboardService : IDashboardService
@@ -22,6 +23,10 @@ public class DashboardService : IDashboardService
     public async Task<DashboardSummary> GetDashboardSummaryAsync(int userId)
     {
         var now = DateTime.UtcNow;
+        var visibleProjectIds = await _context.ProjectMembers
+            .Where(pm => pm.UserId == userId)
+            .Select(pm => pm.ProjectId)
+            .ToListAsync();
 
         var summary = new DashboardSummary
         {
@@ -40,7 +45,15 @@ public class DashboardService : IDashboardService
                 .CountAsync(),
 
             UnreadNotifications = await _context.Notifications
-                .CountAsync(n => n.UserId == userId && !n.IsRead)
+                .CountAsync(n => n.UserId == userId && !n.IsRead),
+
+            RecentDocumentsCount = await _context.Documents
+                .CountAsync(d => !d.IsDeleted && (
+                    d.UploadedByUserId == userId ||
+                    (d.ProjectId != null && (d.Project != null && (d.Project.ProjectManagerId == userId || visibleProjectIds.Contains(d.ProjectId.Value)))) ||
+                    d.Shares.Any(s => s.IsActive && s.SharedWithUserId == userId) ||
+                    d.Shares.Any(s => s.IsActive && s.SharedWithProjectId != null && visibleProjectIds.Contains(s.SharedWithProjectId.Value))
+                ))
         };
 
         return summary;
@@ -59,6 +72,27 @@ public class DashboardService : IDashboardService
             .Take(5)
             .ToListAsync();
     }
+
+    public async Task<List<Document>> GetRecentDocumentsAsync(int userId, int count = 5)
+    {
+        var visibleProjectIds = await _context.ProjectMembers
+            .Where(pm => pm.UserId == userId)
+            .Select(pm => pm.ProjectId)
+            .ToListAsync();
+
+        return await _context.Documents
+            .Include(d => d.Project)
+            .Include(d => d.UploadedByUser)
+            .Where(d => !d.IsDeleted && (
+                d.UploadedByUserId == userId ||
+                (d.ProjectId != null && (d.Project != null && (d.Project.ProjectManagerId == userId || visibleProjectIds.Contains(d.ProjectId.Value)))) ||
+                d.Shares.Any(s => s.IsActive && s.SharedWithUserId == userId) ||
+                d.Shares.Any(s => s.IsActive && s.SharedWithProjectId != null && visibleProjectIds.Contains(s.SharedWithProjectId.Value))
+            ))
+            .OrderByDescending(d => d.UploadDateUtc)
+            .Take(count)
+            .ToListAsync();
+    }
 }
 
 public class DashboardSummary
@@ -67,4 +101,5 @@ public class DashboardSummary
     public int TasksDueToday { get; set; }
     public int ActiveProjects { get; set; }
     public int UnreadNotifications { get; set; }
+    public int RecentDocumentsCount { get; set; }
 }
